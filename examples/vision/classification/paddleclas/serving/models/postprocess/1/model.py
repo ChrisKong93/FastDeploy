@@ -84,7 +84,6 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
         for request in requests:
             infer_outputs = pb_utils.get_input_tensor_by_name(
                 request, self.input_names[0])
@@ -93,7 +92,7 @@ class TritonPythonModel:
             results = self.postprocess_.run([infer_outputs, ])
             r_str = fd.vision.utils.fd_result_to_json(results)
 
-            r_np = np.array(r_str, dtype=np.object)
+            r_np = np.array(r_str, dtype=np.object_)
             out_tensor = pb_utils.Tensor(self.output_names[0], r_np)
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])

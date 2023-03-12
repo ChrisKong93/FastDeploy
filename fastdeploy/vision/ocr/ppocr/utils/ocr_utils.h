@@ -21,7 +21,6 @@
 #include "fastdeploy/vision/common/result.h"
 
 #include "opencv2/core.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
 
 namespace fastdeploy {
@@ -32,6 +31,8 @@ FASTDEPLOY_DECL cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
                            const std::array<int, 8>& box);
 
 FASTDEPLOY_DECL void SortBoxes(std::vector<std::array<int, 8>>* boxes);
+
+FASTDEPLOY_DECL std::vector<int> ArgSort(const std::vector<float> &array);
 
 }  // namespace ocr
 }  // namespace vision

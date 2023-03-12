@@ -51,8 +51,14 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::vector<float> scores;
   ResultType type = ResultType::CLASSIFY;
 
-  /// Clear result
+  /// Resize ClassifyResult data buffer
+  void Resize(int size);
+
+  /// Clear ClassifyResult
   void Clear();
+
+  /// Clear ClassifyResult and free the memory
+  void Free();
 
   /// Copy constructor
   ClassifyResult(const ClassifyResult& other) = default;
@@ -67,13 +73,16 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
  */
 struct FASTDEPLOY_DECL Mask : public BaseResult {
   /// Mask data buffer
-  std::vector<int32_t> data;
+  std::vector<uint8_t> data;
   /// Shape of mask
   std::vector<int64_t> shape;  // (H,W) ...
   ResultType type = ResultType::MASK;
 
-  /// clear mask
+  /// clear Mask result
   void Clear();
+
+  /// Clear Mask result and free the memory
+  void Free();
 
   /// Return a mutable pointer of the mask data buffer
   void* Data() { return data.data(); }
@@ -107,7 +116,7 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
    */
   std::vector<Mask> masks;
-  //// Shows if the DetectionResult has mask
+  /// Shows if the DetectionResult has mask
   bool contain_masks = false;
 
   ResultType type = ResultType::DETECTION;
@@ -117,8 +126,11 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /// Move assignment
   DetectionResult& operator=(DetectionResult&& other);
 
-  /// Clear detection result
+  /// Clear DetectionResult
   void Clear();
+
+  /// Clear DetectionResult and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -140,8 +152,11 @@ struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {
   int num_joints = -1;
 
   ResultType type = ResultType::KEYPOINT_DETECTION;
-  /// Clear detection result
+  /// Clear KeyPointDetectionResult
   void Clear();
+
+  /// Clear KeyPointDetectionResult and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -215,8 +230,11 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
 
   FaceDetectionResult() { landmarks_per_face = 0; }
   FaceDetectionResult(const FaceDetectionResult& res);
-  /// Clear detection result
+  /// Clear FaceDetectionResult
   void Clear();
+
+  /// Clear FaceDetectionResult and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -233,8 +251,11 @@ struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
   std::vector<std::array<float, 2>> landmarks;
 
   ResultType type = ResultType::FACE_ALIGNMENT;
-  /// Clear facealignment result
+  /// Clear FaceAlignmentResult
   void Clear();
+
+  /// Clear FaceAlignmentResult and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -247,6 +268,7 @@ struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
 /*! @brief Segmentation result structure for all the segmentation models
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  SegmentationResult() = default;
   /** \brief
    * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
   */
@@ -257,11 +279,20 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   std::vector<float> score_map;
   /// The output shape, means [H, W]
   std::vector<int64_t> shape;
+  /// SegmentationResult whether containing score_map
   bool contain_score_map = false;
 
+  /// Copy constructor
+  SegmentationResult(const SegmentationResult& other) = default;
+  /// Move assignment
+  SegmentationResult& operator=(SegmentationResult&& other);
+
   ResultType type = ResultType::SEGMENTATION;
-  /// Clear detection result
+  /// Clear Segmentation result
   void Clear();
+
+  /// Clear Segmentation result and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -282,8 +313,11 @@ struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
 
   FaceRecognitionResult() {}
   FaceRecognitionResult(const FaceRecognitionResult& res);
-  /// Clear detection result
+  /// Clear FaceRecognitionResult
   void Clear();
+
+  /// Clear FaceRecognitionResult and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -316,8 +350,11 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 
   MattingResult() {}
   MattingResult(const MattingResult& res);
-  /// Clear detection result
+  /// Clear matting result
   void Clear();
+
+  /// Free matting result
+  void Free();
 
   void Reserve(int size);
 
@@ -334,8 +371,11 @@ struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
   std::vector<float> euler_angles;
 
   ResultType type = ResultType::HEADPOSE;
-  /// Clear headpose result
+  /// Clear HeadPoseResult
   void Clear();
+
+  /// Clear HeadPoseResult and free the memory
+  void Free();
 
   void Reserve(int size);
 

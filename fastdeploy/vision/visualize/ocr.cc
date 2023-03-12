@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
 #include "fastdeploy/vision/visualize/visualize.h"
 
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
+cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result,
+               const float score_threshold) {
   auto vis_im = im.clone();
 
   for (int n = 0; n < ocr_result.boxes.size(); n++) {
+    if (ocr_result.rec_scores[n] < score_threshold) {
+      continue;
+    }
     cv::Point rook_points[4];
 
     for (int m = 0; m < 4; m++) {
@@ -30,7 +32,7 @@ cv::Mat VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
                                  int(ocr_result.boxes[n][m * 2 + 1]));
     }
 
-    const cv::Point *ppt[1] = {rook_points};
+    const cv::Point* ppt[1] = {rook_points};
     int npt[] = {4};
     cv::polylines(vis_im, ppt, npt, 1, 1, CV_RGB(0, 255, 0), 2, 8, 0);
   }
@@ -38,7 +40,7 @@ cv::Mat VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
   return vis_im;
 }
 
-cv::Mat Visualize::VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
+cv::Mat Visualize::VisOcr(const cv::Mat& im, const OCRResult& ocr_result) {
   FDWARNING
       << "DEPRECATED: fastdeploy::vision::Visualize::VisOcr is deprecated, "
          "please use fastdeploy::vision:VisOcr function instead."
@@ -53,7 +55,7 @@ cv::Mat Visualize::VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
                                  int(ocr_result.boxes[n][m * 2 + 1]));
     }
 
-    const cv::Point *ppt[1] = {rook_points};
+    const cv::Point* ppt[1] = {rook_points};
     int npt[] = {4};
     cv::polylines(vis_im, ppt, npt, 1, 1, CV_RGB(0, 255, 0), 2, 8, 0);
   }
@@ -63,4 +65,3 @@ cv::Mat Visualize::VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

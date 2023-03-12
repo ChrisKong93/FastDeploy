@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
@@ -22,28 +23,63 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for Classifier serials model.
  */
-class FASTDEPLOY_DECL ClassifierPreprocessor {
+class FASTDEPLOY_DECL ClassifierPreprocessor : public ProcessorManager {
  public:
-  /** \brief Create a preprocessor instance for Classifier serials model
-   *
-   */
   ClassifierPreprocessor();
-
+  using ProcessorManager::Run;
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] images The input data list, all the elements are FDMat
+   * \param[in] outputs The output tensors which will be fed into runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+           size_t start_index, size_t end_index);
+
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
+   *
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
-  std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
-  std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
-  bool is_scale_ = true;
-  std::vector<int> cls_image_shape_ = {3, 48, 192};
+  /// Set preprocess normalize parameters, please call this API to customize
+  /// the normalize parameters, otherwise it will use the default normalize
+  /// parameters.
+  void SetNormalize(const std::vector<float>& mean,
+                    const std::vector<float>& std,
+                    bool is_scale) {
+    normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  }
+
+  /// Set cls_image_shape for the classification preprocess
+  void SetClsImageShape(const std::vector<int>& cls_image_shape) {
+    cls_image_shape_ = cls_image_shape;
+  }
+  /// Get cls_image_shape for the classification preprocess
+  std::vector<int> GetClsImageShape() const { return cls_image_shape_; }
+
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_permute_ = true; }
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_normalize_ = true; }
 
  private:
-  bool initialized_ = false;
+  void OcrClassifierResizeImage(FDMat* mat,
+                              const std::vector<int>& cls_image_shape);
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
+  std::vector<int> cls_image_shape_ = {3, 48, 192};
+
+  std::shared_ptr<Resize> resize_op_;
+  std::shared_ptr<Pad> pad_op_;
+  std::shared_ptr<Normalize> normalize_op_;
+  std::shared_ptr<HWC2CHW> hwc2chw_op_;
 };
 
 }  // namespace ocr

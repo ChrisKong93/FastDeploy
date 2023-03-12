@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpCustomCrop.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -22,18 +27,25 @@ namespace vision {
 class FASTDEPLOY_DECL CenterCrop : public Processor {
  public:
   CenterCrop(int width, int height) : height_(height), width_(width) {}
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
+#endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
 #endif
   std::string Name() { return "CenterCrop"; }
 
-  static bool Run(Mat* mat, const int& width, const int& height,
+  static bool Run(FDMat* mat, const int& width, const int& height,
                   ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int height_;
   int width_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::CustomCrop cvcuda_crop_op_;
+#endif
 };
 
 }  // namespace vision

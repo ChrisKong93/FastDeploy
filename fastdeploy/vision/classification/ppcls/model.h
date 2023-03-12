@@ -40,6 +40,12 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
                   const RuntimeOption& custom_option = RuntimeOption(),
                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /** \brief Clone a new PaddleClasModel with less memory usage when multiple instances of the same model are created
+   *
+   * \return new PaddleClasModel* type unique pointer
+   */
+  virtual std::unique_ptr<PaddleClasModel> Clone() const;
+
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
@@ -67,6 +73,23 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
    * \return true if the prediction successed, otherwise false
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
+                            std::vector<ClassifyResult>* results);
+
+  /** \brief Predict the classification result for an input image
+   *
+   * \param[in] mat The input mat
+   * \param[in] result The output classification result
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool Predict(const FDMat& mat, ClassifyResult* result);
+
+  /** \brief Predict the classification results for a batch of input images
+   *
+   * \param[in] mats, The input mat list
+   * \param[in] results The output classification result list
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool BatchPredict(const std::vector<FDMat>& mats,
                             std::vector<ClassifyResult>* results);
 
   /// Get preprocessor reference of PaddleClasModel

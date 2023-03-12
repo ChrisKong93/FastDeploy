@@ -19,6 +19,7 @@
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 #include "fastdeploy/vision/ocr/ppocr/cls_postprocessor.h"
 #include "fastdeploy/vision/ocr/ppocr/cls_preprocessor.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -41,24 +42,72 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
   Classifier(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
+
+  /** \brief Clone a new Classifier with less memory usage when multiple instances of the same model are created
+   *
+   * \return new Classifier* type unique pointer
+   */
+  virtual std::unique_ptr<Classifier> Clone() const;
+
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_cls"; }
+
+  /** \brief Predict the input image and get OCR classification model cls_result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] cls_label The label result of cls model will be written in to this param.
+   * \param[in] cls_score The score result of cls model will be written in to this param.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img,
+                      int32_t* cls_label, float* cls_score);
+
+  /** \brief Predict the input image and get OCR recognition model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR recognition model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img, vision::OCRResult* ocr_result);
+
+  /** \brief BatchPredict the input image and get OCR classification model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR classification model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+                              vision::OCRResult* ocr_result);
 
   /** \brief BatchPredict the input image and get OCR classification model cls_result.
    *
    * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
-   * \param[in] cls_results The output of OCR classification model cls_result will be writen to this structure.
+   * \param[in] cls_labels The label results of cls model will be written in to this vector.
+   * \param[in] cls_scores The score results of cls model will be written in to this vector.
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             std::vector<int32_t>* cls_labels,
                             std::vector<float>* cls_scores);
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+                            std::vector<int32_t>* cls_labels,
+                            std::vector<float>* cls_scores,
+                            size_t start_index, size_t end_index);
 
-  ClassifierPreprocessor preprocessor_;
-  ClassifierPostprocessor postprocessor_;
+  /// Get preprocessor reference of ClassifierPreprocessor
+  virtual ClassifierPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of ClassifierPostprocessor
+  virtual ClassifierPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  private:
   bool Initialize();
+  ClassifierPreprocessor preprocessor_;
+  ClassifierPostprocessor postprocessor_;
 };
 
 }  // namespace ocr

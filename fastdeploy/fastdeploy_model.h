@@ -45,9 +45,21 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
+    /** Model's valid directml backends. This member defined all the onnxruntime directml backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_directml_backends = {};
+  /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_ascend_backends = {};
+  /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_kunlunxin_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
+  /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -66,7 +78,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     return runtime_initialized_ && initialized;
   }
 
-  /** \brief This is a debug interface, used to record the time of backend runtime
+  /** \brief This is a debug interface, used to record the time of runtime (backend + h2d + d2h)
    *
    * example code @code
    * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
@@ -89,7 +101,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     enable_record_time_of_runtime_ = true;
   }
 
-  /** \brief Disable to record the time of backend runtime, see `EnableRecordTimeOfRuntime()` for more detail
+  /** \brief Disable to record the time of runtime, see `EnableRecordTimeOfRuntime()` for more detail
   */
   virtual void DisableRecordTimeOfRuntime() {
     enable_record_time_of_runtime_ = false;
@@ -104,12 +116,28 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
-
+  /** \brief Get profile time of Runtime after the profile process is done.
+   */
+  virtual double GetProfileTime() {
+    return runtime_->GetProfileTime();
+  }
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
     std::vector<FDTensor>().swap(reused_input_tensors_);
     std::vector<FDTensor>().swap(reused_output_tensors_);
+  }
+
+  virtual fastdeploy::Runtime* CloneRuntime() { return runtime_->Clone(); }
+
+  virtual bool SetRuntime(fastdeploy::Runtime* clone_runtime) {
+    runtime_ = std::unique_ptr<Runtime>(clone_runtime);
+    return true;
+  }
+
+  virtual std::unique_ptr<FastDeployModel> Clone() {
+    FDERROR << ModelName() << " doesn't support Cone() now." << std::endl;
+    return nullptr;
   }
 
  protected:
@@ -128,14 +156,18 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateGpuBackend();
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
+  bool CreateSophgoNPUBackend();
   bool CreateTimVXBackend();
+  bool CreateKunlunXinBackend();
+  bool CreateASCENDBackend();
+  bool CreateDirectMLBackend();
+  bool IsSupported(const std::vector<Backend>& backends,
+                   Backend backend);
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-
-  // record inference time for backend
   std::vector<double> time_of_runtime_;
 };
 

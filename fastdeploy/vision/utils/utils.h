@@ -59,26 +59,47 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
   return res;
 }
 
-void NMS(DetectionResult* output, float iou_threshold = 0.5);
+void NMS(DetectionResult* output, float iou_threshold = 0.5,
+         std::vector<int>* index = nullptr);
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
 
-// MergeSort
-void SortDetectionResult(DetectionResult* output);
+/// Sort DetectionResult/FaceDetectionResult by score
+FASTDEPLOY_DECL void SortDetectionResult(DetectionResult* result);
+FASTDEPLOY_DECL void SortDetectionResult(FaceDetectionResult* result);
+/// Lex Sort DetectionResult by x(w) & y(h) axis
+FASTDEPLOY_DECL void LexSortDetectionResultByXY(DetectionResult* result);
+/// Lex Sort OCRDet Result by x(w) & y(h) axis
+FASTDEPLOY_DECL void LexSortOCRDetResultByXY(
+                     std::vector<std::array<int, 8>>* result);
 
-void SortDetectionResult(FaceDetectionResult* result);
-
-// L2 Norm / cosine similarity  (for face recognition, ...)
-FASTDEPLOY_DECL std::vector<float> L2Normalize(
-    const std::vector<float>& values);
+/// L2 Norm / cosine similarity  (for face recognition, ...)
+FASTDEPLOY_DECL std::vector<float>
+L2Normalize(const std::vector<float>& values);
 
 FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-bool CropImageByBox(Mat& src_im, Mat* dst_im,
-                    const std::vector<float>& box, std::vector<float>* center,
-                    std::vector<float>* scale, const float expandratio = 0.3);
+/** \brief Do face align for model with five points.
+   *
+   * \param[in] image The original image
+   * \param[in] result FaceDetectionResult
+   * \param[in] std_landmarks Standard face template
+   * \param[in] output_size The size of output mat
+   */
+FASTDEPLOY_DECL std::vector<cv::Mat> AlignFaceWithFivePoints(
+    cv::Mat& image, FaceDetectionResult& result,
+    std::vector<std::array<float, 2>> std_landmarks = {{38.2946f, 51.6963f},
+                                                       {73.5318f, 51.5014f},
+                                                       {56.0252f, 71.7366f},
+                                                       {41.5493f, 92.3655f},
+                                                       {70.7299f, 92.2041f}},
+    std::array<int, 2> output_size = {112, 112});
+
+bool CropImageByBox(Mat& src_im, Mat* dst_im, const std::vector<float>& box,
+                    std::vector<float>* center, std::vector<float>* scale,
+                    const float expandratio = 0.3);
 
 /**
  * Function: for keypoint detection model, fine positioning of keypoints in

@@ -16,31 +16,39 @@ from __future__ import absolute_import
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
-class PaddleClasPreprocessor:
+class PaddleClasPreprocessor(ProcessorManager):
     def __init__(self, config_file):
         """Create a preprocessor for PaddleClasModel from configuration file
 
         :param config_file: (str)Path of configuration file, e.g resnet50/inference_cls.yaml
         """
-        self._preprocessor = C.vision.classification.PaddleClasPreprocessor(
+        super(PaddleClasPreprocessor, self).__init__()
+        self._manager = C.vision.classification.PaddleClasPreprocessor(
             config_file)
 
-    def run(self, input_ims):
-        """Preprocess input images for PaddleClasModel
-
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
+    def disable_normalize(self):
         """
-        return self._preprocessor.run(input_ims)
-
-    def use_gpu(self, gpu_id=-1):
-        """Use CUDA preprocessors
-
-        :param: gpu_id: GPU device id
+        This function will disable normalize in preprocessing step.
         """
-        return self._preprocessor.use_gpu(gpu_id)
+        self._manager.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._manager.disable_permute()
+
+    def initial_resize_on_cpu(self, v):
+        """
+        When the initial operator is Resize, and input image size is large,
+        maybe it's better to run resize on CPU, because the HostToDevice memcpy
+        is time consuming. Set this True to run the initial resize on CPU.
+        :param: v: True or False
+        """
+        self._manager.initial_resize_on_cpu(v)
 
 
 class PaddleClasPostprocessor:
@@ -78,12 +86,23 @@ class PaddleClasModel(FastDeployModel):
         """
 
         super(PaddleClasModel, self).__init__(runtime_option)
-
-        assert model_format == ModelFormat.PADDLE, "PaddleClasModel only support model format of ModelFormat.PADDLE now."
         self._model = C.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "PaddleClas model initialize failed."
+
+    def clone(self):
+        """Clone PaddleClasModel object
+
+        :return: a new PaddleClasModel object
+        """
+
+        class PaddleClasCloneModel(PaddleClasModel):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PaddleClasCloneModel(self._model.clone())
+        return clone_model
 
     def predict(self, im, topk=1):
         """Classify an input image

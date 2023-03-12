@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -31,13 +36,16 @@ class FASTDEPLOY_DECL Resize : public Processor {
     use_scale_ = use_scale;
   }
 
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
+#endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
 #endif
   std::string Name() { return "Resize"; }
 
-  static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,
+  static bool Run(FDMat* mat, int width, int height, float scale_w = -1.0,
                   float scale_h = -1.0, int interp = 1, bool use_scale = false,
                   ProcLib lib = ProcLib::DEFAULT);
 
@@ -58,6 +66,9 @@ class FASTDEPLOY_DECL Resize : public Processor {
   float scale_h_ = -1.0;
   int interp_ = 1;
   bool use_scale_ = false;
+#ifdef ENABLE_CVCUDA
+  cvcuda::Resize cvcuda_resize_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy

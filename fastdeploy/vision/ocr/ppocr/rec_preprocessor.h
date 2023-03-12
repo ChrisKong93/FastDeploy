@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
@@ -22,29 +23,78 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for PaddleClas serials model.
  */
-class FASTDEPLOY_DECL RecognizerPreprocessor {
+class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
  public:
-  /** \brief Create a preprocessor instance for PaddleClas serials model
-   *
-   * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
-   */
   RecognizerPreprocessor();
-
+  using ProcessorManager::Run;
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] images The input data list, all the elements are FDMat
+   * \param[in] outputs The output tensors which will be fed into runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+           size_t start_index, size_t end_index,
+           const std::vector<int>& indices);
+
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
+   *
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
-  std::vector<int> rec_image_shape_ = {3, 48, 320};
-  std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
-  std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
-  bool is_scale_ = true;
+  /// Set static_shape_infer is true or not. When deploy PP-OCR
+  /// on hardware which can not support dynamic input shape very well,
+  /// like Huawei Ascned, static_shape_infer needs to to be true.
+  void SetStaticShapeInfer(bool static_shape_infer) {
+    static_shape_infer_ = static_shape_infer;
+  }
+  /// Get static_shape_infer of the recognition preprocess
+  bool GetStaticShapeInfer() const { return static_shape_infer_; }
+
+  /// Set preprocess normalize parameters, please call this API to customize
+  /// the normalize parameters, otherwise it will use the default normalize
+  /// parameters.
+  void SetNormalize(const std::vector<float>& mean,
+                    const std::vector<float>& std,
+                    bool is_scale) {
+    normalize_permute_op_ =
+        std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
+    normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  }
+
+  /// Set rec_image_shape for the recognition preprocess
+  void SetRecImageShape(const std::vector<int>& rec_image_shape) {
+    rec_image_shape_ = rec_image_shape;
+  }
+  /// Get rec_image_shape for the recognition preprocess
+  std::vector<int> GetRecImageShape() { return rec_image_shape_; }
+
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_permute_ = true; }
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_normalize_ = true; }
 
  private:
-  bool initialized_ = false;
+  void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
+                              const std::vector<int>& rec_image_shape,
+                              bool static_shape_infer);
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
+  std::vector<int> rec_image_shape_ = {3, 48, 320};
+  bool static_shape_infer_ = false;
+  std::shared_ptr<Resize> resize_op_;
+  std::shared_ptr<Pad> pad_op_;
+  std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
+  std::shared_ptr<Normalize> normalize_op_;
+  std::shared_ptr<HWC2CHW> hwc2chw_op_;
+  std::shared_ptr<Cast> cast_op_;
 };
 
 }  // namespace ocr

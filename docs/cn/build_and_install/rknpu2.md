@@ -1,104 +1,157 @@
-# RK2代NPU部署库编译
+[English](../../en/build_and_install/rknpu2.md) | 简体中文
 
-## 写在前面
-FastDeploy已经初步支持RKNPU2的部署。使用的过程中，如果出现Bug请提Issues反馈。
+# FastDeploy RKNPU2 导航文档
 
-## 简介
-FastDeploy当前在RK平台上支持后端引擎如下:
+RKNPU2指的是Rockchip推出的RK356X以及RK3588系列芯片的NPU。
+目前FastDeploy已经初步支持使用RKNPU2来部署模型。
+如果您在使用的过程中出现问题，请附带上您的运行环境，在Issues中反馈。
 
-| 后端                | 平台                   | 支持模型格式 | 说明                                         |
-|:------------------|:---------------------|:-------|:-------------------------------------------|
-| ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
-| RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
+## FastDeploy RKNPU2 环境安装简介
 
+如果您想在FastDeploy中使用RKNPU2推理引擎，你需要配置以下几个环境。
 
-## C++ SDK编译安装
+| 工具名          | 是否必须 | 安装设备  | 用途                              |  
+|--------------|------|-------|---------------------------------|
+| Paddle2ONNX  | 必装   | PC    | 用于转换PaddleInference模型到ONNX模型    |  
+| RKNNToolkit2 | 必装   | PC    | 用于转换ONNX模型到rknn模型               |  
+| RKNPU2       | 选装   | Board | RKNPU2的基础驱动，FastDeploy已经集成，可以不装 |
 
-RKNPU2仅支持linux下进行编译,以下教程均在linux环境下完成。
+## 安装模型转换环境
 
-### 更新驱动和安装编译时需要的环境
+模型转换环境需要在Ubuntu下完成，我们建议您使用conda作为python控制器，并使用python3.6作为您的模型转换环境。
+例如您可以输入以下命令行完成对python3.6环境的创建
 
-
-在运行代码之前，我们需要安装以下最新的RKNPU驱动，目前驱动更新至1.4.0。为了简化安装我编写了快速安装脚本，一键即可进行安装。
-
-**方法1: 通过脚本安装**
 ```bash
-# 下载解压rknpu2_device_install_1.4.0
-wget https://bj.bcebos.com/fastdeploy/third_libs/rknpu2_device_install_1.4.0.zip
-unzip rknpu2_device_install_1.4.0.zip
-
-cd rknpu2_device_install_1.4.0
-# RK3588运行以下代码
-sudo rknn_install_rk3588.sh
-# RK356X运行以下代码
-sudo rknn_install_rk356X.sh
+conda create -n rknn2 python=3.6
+conda activate rknn2
 ```
 
-**方法2: 通过gitee安装**
+### 安装必备的依赖软件包
+
+在安装RKNNtoolkit2之前我们需要安装一下必备的软件包
+
 ```bash
-# 安装必备的包
-sudo apt update -y
-sudo apt install -y python3 
-sudo apt install -y python3-dev 
-sudo apt install -y python3-pip 
-sudo apt install -y gcc
-sudo apt install -y python3-opencv
-sudo apt install -y python3-numpy
-sudo apt install -y cmake
-
-# 下载rknpu2
-# RK3588运行以下代码
-git clone https://gitee.com/mirrors_rockchip-linux/rknpu2.git
-sudo cp ./rknpu2/runtime/RK3588/Linux/librknn_api/aarch64/* /usr/lib
-sudo cp ./rknpu2/runtime/RK3588/Linux/rknn_server/aarch64/usr/bin/* /usr/bin/
-
-# RK356X运行以下代码
-git clone https://gitee.com/mirrors_rockchip-linux/rknpu2.git
-sudo cp ./rknpu2/runtime/RK356X/Linux/librknn_api/aarch64/* /usr/lib
-sudo cp ./rknpu2/runtime/RK356X/Linux/rknn_server/aarch64/usr/bin/* /usr/bin/
+sudo apt-get install libxslt1-dev zlib1g zlib1g-dev libglib2.0-0 libsm6 libgl1-mesa-glx libprotobuf-dev gcc g++
 ```
 
-### 编译C++ SDK
+
+### 安装RKNNtoolkit2
+
+目前，FastDeploy使用的转化工具版本号为1.4.2b3。如果你有使用最新版本的转换工具的需求，你可以在Rockchip提供的[百度网盘(提取码为rknn)](https://eyun.baidu.com/s/3eTDMk6Y)
+中找到最新版本的模型转换工具。
+
+```bash
+# rknn_toolkit2对numpy存在特定依赖,因此需要先安装numpy==1.16.6
+pip install numpy==1.16.6
+
+# 安装rknn_toolkit2-1.3.0_11912b58-cp38-cp38-linux_x86_64.whl
+wget https://bj.bcebos.com/fastdeploy/third_libs/rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
+pip install rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
+```
+
+## 安装FastDeploy C++ SDK
+
+针对RK356X和RK3588的性能差异，我们提供了两种编译FastDeploy的方式。
+
+
+### 板端编译FastDeploy C++ SDK
+
+针对RK3588，其CPU性能较强，板端编译的速度还是可以接受的，我们推荐在板端上进行编译。以下教程在RK356X(debian10),RK3588(debian 11) 环境下完成。
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
-mkdir build && cd build
 
-# 编译配置详情见README文件，这里只介绍关键的几个配置
-# -DENABLE_ORT_BACKEND:     是否开启ONNX模型，默认关闭
-# -DENABLE_RKNPU2_BACKEND:  是否开启RKNPU模型，默认关闭
-# -RKNN2_TARGET_SOC:             编译SDK的板子型号，只能输入RK356X或者RK3588，注意区分大小写
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
+mkdir build && cd build
 cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
-          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
 make -j8
 make install
 ```
 
-### 编译Python SDK
+### 交叉编译FastDeploy C++ SDK
 
-Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+针对RK356X，其CPU性能较弱，我们推荐使用交叉编译进行编译。以下教程在Ubuntu 22.04环境下完成。
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
-cd python
 
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
+mkdir build && cd build
+cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ \
+          -DCMAKE_TOOLCHAIN_FILE=./../cmake/toolchain.cmake \
+          -DTARGET_ABI=arm64 \
+          -DENABLE_ORT_BACKEND=OFF \
+	      -DENABLE_RKNPU2_BACKEND=ON \
+	      -DENABLE_VISION=ON \
+	      -DRKNN2_TARGET_SOC=RK356X \
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
+make -j8
+make install
+```
+
+如果你找不到编译工具，你可以复制[交叉编译工具](https://bj.bcebos.com/paddle2onnx/libs/gcc-linaro-6.3.1-2017.zip)进行下载。
+
+### 配置环境变量
+
+为了方便大家配置环境变量，FastDeploy提供了一键配置环境变量的脚本，在运行程序前，你需要执行以下命令
+
+```bash
+# 临时配置
+source PathToFastDeploySDK/fastdeploy_init.sh
+
+# 永久配置
+source PathToFastDeploySDK/fastdeploy_init.sh
+sudo cp PathToFastDeploySDK/fastdeploy_libs.conf /etc/ld.so.conf.d/
+sudo ldconfig
+```
+
+## 编译FastDeploy Python SDK
+
+除了NPU，Rockchip的芯片还有其他的一些功能。
+这些功能大部分都是需要C/C++进行编程，因此如果您使用到了这些模块，我们不推荐您使用Python SDK.
+Python SDK的编译暂时仅支持板端编译, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+
+
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy
+
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
+cd python
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_RKNPU2_BACKEND=ON
 export ENABLE_VISION=ON
+
+# 请根据你的开发版的不同，选择RK3588和RK356X
 export RKNN2_TARGET_SOC=RK3588
+
+# 如果你的核心板的运行内存大于等于8G，我们建议您执行以下命令进行编译。
 python3 setup.py build
+# 值得注意的是，如果你的核心板的运行内存小于8G，我们建议您执行以下命令进行编译。
+python3 setup.py build -j1
+
 python3 setup.py bdist_wheel
-
 cd dist
-
 pip3 install fastdeploy_python-0.0.0-cp39-cp39-linux_aarch64.whl
 ```
 
-## 部署模型
+## 导航目录
 
-请查看[RKNPU2部署模型教程](../faq/rknpu2/rknpu2.md)
+* [RKNPU2开发环境搭建](../faq/rknpu2/environment.md)
+* [编译FastDeploy](../faq/rknpu2/build.md)
+* [RKNN模型导出建议](../faq/rknpu2/export.md)
+* [RKNPU2模型速度一览表](../faq/rknpu2/rknpu2.md)
+* [RKNPU2 常见问题合集](../faq/rknpu2/issues.md)

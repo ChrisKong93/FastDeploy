@@ -13,84 +13,127 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
+
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
 RecognizerPreprocessor::RecognizerPreprocessor() {
-  initialized_ = true;
+  resize_op_ = std::make_shared<Resize>(-1, -1);
+
+  std::vector<float> value = {127, 127, 127};
+  pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
+
+  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
+  std::vector<float> std = {0.5f, 0.5f, 0.5f};
+  normalize_permute_op_ =
+      std::make_shared<NormalizeAndPermute>(mean, std, true);
+  normalize_op_ = std::make_shared<Normalize>(mean, std, true);
+  hwc2chw_op_ = std::make_shared<HWC2CHW>();
+  cast_op_ = std::make_shared<Cast>("float");
 }
 
-void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
-                              const std::vector<int>& rec_image_shape) {
-  int imgC, imgH, imgW;
-  imgC = rec_image_shape[0];
-  imgH = rec_image_shape[1];
-  imgW = rec_image_shape[2];
+void RecognizerPreprocessor::OcrRecognizerResizeImage(
+    FDMat* mat, float max_wh_ratio, const std::vector<int>& rec_image_shape,
+    bool static_shape_infer) {
+  int img_h, img_w;
+  img_h = rec_image_shape[1];
+  img_w = rec_image_shape[2];
 
-  imgW = int(imgH * max_wh_ratio);
+  if (!static_shape_infer) {
+    img_w = int(img_h * max_wh_ratio);
+    float ratio = float(mat->Width()) / float(mat->Height());
 
-  float ratio = float(mat->Width()) / float(mat->Height());
-  int resize_w;
-  if (ceilf(imgH * ratio) > imgW) {
-    resize_w = imgW;
-  }else{
-    resize_w = int(ceilf(imgH * ratio));
+    int resize_w;
+    if (ceilf(img_h * ratio) > img_w) {
+      resize_w = img_w;
+    } else {
+      resize_w = int(ceilf(img_h * ratio));
+    }
+    resize_op_->SetWidthAndHeight(resize_w, img_h);
+    (*resize_op_)(mat);
+    pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
+    (*pad_op_)(mat);
+  } else {
+    if (mat->Width() >= img_w) {
+      // Reszie W to 320
+      resize_op_->SetWidthAndHeight(img_w, img_h);
+      (*resize_op_)(mat);
+    } else {
+      resize_op_->SetWidthAndHeight(mat->Width(), img_h);
+      (*resize_op_)(mat);
+      // Pad to 320
+      pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
+      (*pad_op_)(mat);
+    }
   }
-  Resize::Run(mat, resize_w, imgH);
-
-  std::vector<float> value = {0, 0, 0};
-  Pad::Run(mat, 0, 0, 0, int(imgW - mat->Width()), value);
 }
 
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
-  if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs,
+                                 size_t start_index, size_t end_index,
+                                 const std::vector<int>& indices) {
+  if (images->size() == 0 || end_index <= start_index ||
+      end_index > images->size()) {
+    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < "
+               "end_index <= images->size()"
+            << std::endl;
     return false;
   }
 
-  int imgH = rec_image_shape_[1];
-  int imgW = rec_image_shape_[2];
-  float max_wh_ratio = imgW * 1.0 / imgH;
+  std::vector<FDMat> mats(end_index - start_index);
+  for (size_t i = start_index; i < end_index; ++i) {
+    size_t real_index = i;
+    if (indices.size() != 0) {
+      real_index = indices[i];
+    }
+    mats[i - start_index] = images->at(real_index);
+  }
+  return Run(&mats, outputs);
+}
+
+bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
+                                   std::vector<FDTensor>* outputs) {
+  int img_h = rec_image_shape_[1];
+  int img_w = rec_image_shape_[2];
+  float max_wh_ratio = img_w * 1.0 / img_h;
   float ori_wh_ratio;
-  
-  for (size_t i = 0; i < images->size(); ++i) {
-    FDMat* mat = &(images->at(i));
+
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
   }
 
-  for (size_t i = 0; i < images->size(); ++i) {
-    FDMat* mat = &(images->at(i));
-    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
-    /*
-    Normalize::Run(mat, mean_, scale_, is_scale_);
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
-    */
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
+    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
+                             static_shape_infer_);
   }
+
+  if (!disable_normalize_ && !disable_permute_) {
+    (*normalize_permute_op_)(image_batch);
+  } else {
+    if (!disable_normalize_) {
+      (*normalize_op_)(image_batch);
+    }
+    if (!disable_permute_) {
+      (*hwc2chw_op_)(image_batch);
+      (*cast_op_)(image_batch);
+    }
+  }
+
   // Only have 1 output Tensor.
   outputs->resize(1);
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
-  for (size_t i = 0; i < images->size(); ++i) {
-    (*images)[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  // Get the NCHW tensor
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 

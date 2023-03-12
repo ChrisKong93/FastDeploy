@@ -13,17 +13,24 @@
 // limitations under the License.
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/vision/common/processors/utils.h"
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
+
+#ifdef ENABLE_FLYCV
+#include "flycv.h"  // NOLINT
+#endif
+
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
 enum Layout { HWC, CHW };
 
-
 struct FASTDEPLOY_DECL Mat {
+  Mat() = default;
   explicit Mat(const cv::Mat& mat) {
     cpu_mat = mat;
     layout = Layout::HWC;
@@ -47,6 +54,9 @@ struct FASTDEPLOY_DECL Mat {
   Mat(const Mat& mat) = default;
   Mat& operator=(const Mat& mat) = default;
 
+  // Move constructor
+  Mat(Mat&& other) = default;
+
   // Careful if you use this interface
   // this only used if you don't want to write
   // the original data, and write to a new cv::Mat
@@ -56,48 +66,25 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
-  cv::Mat* GetOpenCVMat() {
-    if (mat_type == ProcLib::OPENCV) {
-      return &cpu_mat;
-    } else if (mat_type == ProcLib::FLYCV) {
-#ifdef ENABLE_FLYCV
-      // Just a reference to fcv_mat, zero copy. After you
-      // call this method, cpu_mat and fcv_mat will point
-      // to the same memory buffer.
-      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
-      mat_type = ProcLib::OPENCV;
-      return &cpu_mat;
-#else
-      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
-#endif
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
+  cv::Mat* GetOpenCVMat();
 
 #ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
     mat_type = ProcLib::FLYCV;
   }
-
-  fcv::Mat* GetFlyCVMat() {
-    if (mat_type == ProcLib::FLYCV) {
-      return &fcv_mat;
-    } else if (mat_type == ProcLib::OPENCV) {
-      // Just a reference to cpu_mat, zero copy. After you
-      // call this method, fcv_mat and cpu_mat will point
-      // to the same memory buffer.
-      fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
-      mat_type = ProcLib::FLYCV;
-      return &fcv_mat;
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
+  fcv::Mat* GetFlyCVMat();
 #endif
 
   void* Data();
+
+  // Get fd_tensor
+  FDTensor* Tensor();
+
+  // Set fd_tensor
+  void SetTensor(FDTensor* tensor);
+
+  void SetTensor(std::shared_ptr<FDTensor>& tensor);
 
  private:
   int channels;
@@ -107,6 +94,12 @@ struct FASTDEPLOY_DECL Mat {
 #ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
+#ifdef WITH_GPU
+  cudaStream_t stream = nullptr;
+#endif
+  // Currently, fd_tensor is only used by CUDA and CV-CUDA,
+  // OpenCV and FlyCV are not using it.
+  std::shared_ptr<FDTensor> fd_tensor = std::make_shared<FDTensor>();
 
  public:
   FDDataType Type();
@@ -116,6 +109,15 @@ struct FASTDEPLOY_DECL Mat {
   void SetChannels(int s) { channels = s; }
   void SetWidth(int w) { width = w; }
   void SetHeight(int h) { height = h; }
+
+  // When using CV-CUDA/CUDA, please set input/output cache,
+  // refer to manager.cc
+  FDTensor* input_cache = nullptr;
+  FDTensor* output_cache = nullptr;
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream; }
+  void SetStream(cudaStream_t s) { stream = s; }
+#endif
 
   // Transfer the vision::Mat to FDTensor
   void ShareWithTensor(FDTensor* tensor);
@@ -132,6 +134,7 @@ struct FASTDEPLOY_DECL Mat {
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
   Device device = Device::CPU;
+  ProcLib proc_lib = ProcLib::DEFAULT;
 
   // Create FD Mat from FD Tensor. This method only create a
   // new FD Mat with zero copy and it's data pointer is reference
@@ -158,5 +161,12 @@ FASTDEPLOY_DECL FDMat WrapMat(const cv::Mat& image);
  */
 FASTDEPLOY_DECL std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images);
 
+bool CheckShapeConsistency(std::vector<Mat>* mats);
+
+// Create an input tensor on GPU and save into input_cache.
+// If the Mat is on GPU, return the mat->Tensor() directly.
+// If the Mat is on CPU, then update the input cache tensor and copy the mat's
+// CPU tensor to this new GPU input cache tensor.
+FDTensor* CreateCachedGpuInputTensor(Mat* mat);
 }  // namespace vision
 }  // namespace fastdeploy
